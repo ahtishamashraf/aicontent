@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import pytest
 from pydantic import ValidationError
 
@@ -20,7 +22,13 @@ SAFE_PRODUCTION: dict[str, object] = {
 }
 
 
-def test_development_defaults_are_usable() -> None:
+def test_development_defaults_are_usable(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Clear any ORIGINLENS_* variables so this asserts the built-in defaults
+    # rather than whatever the surrounding environment happens to set.
+    for name in list(os.environ):
+        if name.startswith("ORIGINLENS_"):
+            monkeypatch.delenv(name, raising=False)
+
     settings = Settings(_env_file=None)
     assert settings.environment == "development"
     assert settings.is_production is False

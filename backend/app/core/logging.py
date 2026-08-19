@@ -43,6 +43,9 @@ SENSITIVE_KEYS = frozenset(
 
 REDACTED = "[redacted]"
 
+#: Attributes every LogRecord carries; these are framework metadata, not payload.
+_RESERVED_RECORD_ATTRS = frozenset(vars(logging.LogRecord("", 0, "", 0, "", None, None)))
+
 #: Keys that carry free-form submitted content. Once one appears in a log line,
 #: the remainder of that line is unbounded content and is dropped entirely.
 CONTENT_KEYS = frozenset({"text", "content", "original_text", "display_text", "analysis_text"})
@@ -97,8 +100,11 @@ class RedactionFilter(logging.Filter):
             record.msg = redact_text(record.msg)
         if isinstance(record.args, dict):
             record.args = redact_mapping(record.args)
+        # Only scrub caller-supplied `extra` fields. LogRecord's own attributes
+        # (notably `filename`, meaning the *source* file) are diagnostic, and
+        # redacting them would throw away the location of the log call.
         for key in list(vars(record)):
-            if key.lower() in SENSITIVE_KEYS:
+            if key not in _RESERVED_RECORD_ATTRS and key.lower() in SENSITIVE_KEYS:
                 setattr(record, key, REDACTED)
         return True
 
