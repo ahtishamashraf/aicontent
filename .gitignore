@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Node
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+
+# Playwright
+/frontend/test-results/
+/frontend/playwright-report/
+/frontend/blob-report/
+/frontend/.playwright/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Model weights & caches (never commit)
+/models/
+hf_cache/
+*.safetensors
+*.bin
+*.onnx
+
+# Local data
+*.sqlite3
+*.db
+/uploads/
+/tmp/
+local-pgdata/
