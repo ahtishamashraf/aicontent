@@ -224,7 +224,7 @@ jobs:
       # only on failure, kept briefly, and must be reviewed before sharing.
       - name: Upload Playwright report on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: frontend/playwright-report/
