@@ -101,9 +101,8 @@ class TestAdminOperations:
         admin = make_user(db, email="ops2@example.com", role="admin")
         target = make_user(db, email="victim@example.com")
 
-        target_client_cookies = None
         login(client, target.email)
-        assert client.get("/api/v1/auth/session").status_code == 200
+        assert client.get("/api/v1/auth/session").json()["user"] is not None
         target_client_cookies = dict(client.cookies)
         client.cookies.clear()
 
@@ -117,7 +116,7 @@ class TestAdminOperations:
 
         for name, value in target_client_cookies.items():
             client.cookies.set(name, value)
-        assert client.get("/api/v1/auth/session").status_code == 401
+        assert client.get("/api/v1/auth/session").json()["user"] is None
 
     def test_admin_cannot_suspend_themselves(self, client: TestClient, db: OrmSession) -> None:
         admin = make_user(db, email="self@example.com", role="admin")

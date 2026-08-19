@@ -82,6 +82,15 @@ def reset_redis() -> None:
     _client = None
 
 
+def effective_limit(policy: RateLimitPolicy) -> int:
+    """Return the policy limit scaled by the configured multiplier.
+
+    Production is validated to keep the multiplier at 1.0, so this can only
+    relax limits in development and disposable test stacks.
+    """
+    return max(1, int(policy.limit * get_settings().rate_limit_multiplier))
+
+
 def identifier_digest(raw_identifier: str) -> str:
     """Return the privacy-preserving digest of a client identifier.
 
@@ -101,6 +110,7 @@ def check_rate_limit(
     if policy is None:
         raise KeyError(f"Unknown rate limit policy '{policy_name}'")
 
+    limit = effective_limit(policy)
     key = f"rl:{policy.name}:{identifier_digest(raw_identifier)}"
 
     try:
@@ -120,12 +130,12 @@ def check_rate_limit(
         # become unlimited, so they opt into failing closed.
         if fail_closed:
             return RateLimitResult(allowed=False, remaining=0, retry_after=60)
-        return RateLimitResult(allowed=True, remaining=policy.limit, retry_after=0)
+        return RateLimitResult(allowed=True, remaining=limit, retry_after=0)
 
-    if count > policy.limit:
+    if count > limit:
         return RateLimitResult(allowed=False, remaining=0, retry_after=max(ttl, 1))
 
-    return RateLimitResult(allowed=True, remaining=max(policy.limit - count, 0), retry_after=0)
+    return RateLimitResult(allowed=True, remaining=max(limit - count, 0), retry_after=0)
 
 
 def reset_policy(policy_name: str, raw_identifier: str) -> None:

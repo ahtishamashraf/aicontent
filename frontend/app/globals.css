@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-surface-sunken text-ink antialiased;
+    /* Nothing may push the page sideways on a 320px viewport. */
+    overflow-x: hidden;
+  }
+
+  /* A visible, high-contrast focus ring on every focusable element. Focus is
+     never removed — only restyled — so keyboard users always know where they are. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand ring-offset-2 ring-offset-surface;
+  }
+
+  /* Long words and URLs must wrap rather than widen the layout. */
+  p,
+  li,
+  h1,
+  h2,
+  h3,
+  td,
+  th {
+    overflow-wrap: break-word;
+  }
+
+  ::selection {
+    @apply bg-brand-soft text-ink;
+  }
+}
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .card {
+    @apply rounded-card border border-line bg-surface shadow-card;
+  }
+
+  .skip-link {
+    @apply absolute left-4 top-4 z-50 -translate-y-24 rounded-md bg-ink px-4 py-2
+           text-sm font-semibold text-white transition-transform
+           focus-visible:translate-y-0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Printed results keep the evidence and drop the interface. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+    color: #000;
+    font-size: 11pt;
+  }
+
+  .card {
+    border: 1px solid #999;
+    box-shadow: none;
+    break-inside: avoid;
+  }
+
+  a[href]::after {
+    content: "";
+  }
+
+  .print-disclaimer {
+    border: 1px solid #333 !important;
+    break-inside: avoid;
+  }
+}

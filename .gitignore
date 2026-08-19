@@ -42,3 +42,6 @@ hf_cache/
 /uploads/
 /tmp/
 local-pgdata/
+
+# Local service data
+/var-pgdata/

@@ -183,17 +183,21 @@ class TestLogin:
 
 
 class TestSessionLifecycle:
-    def test_profile_requires_authentication(self, client: TestClient) -> None:
+    def test_anonymous_session_returns_a_null_user_not_an_error(
+        self, client: TestClient
+    ) -> None:
+        # 200 with user=null, so an anonymous page load does not log a console
+        # error on every request.
         response = client.get("/api/v1/auth/session")
-        assert response.status_code == 401
-        assert response.json()["error"]["code"] == "authentication_required"
+        assert response.status_code == 200
+        assert response.json()["user"] is None
 
     def test_profile_never_exposes_the_password_hash(
         self, client: TestClient, db: OrmSession
     ) -> None:
         user = make_user(db, email="profile@example.com")
         login(client, user.email)
-        body = client.get("/api/v1/auth/session").json()
+        body = client.get("/api/v1/auth/session").json()["user"]
         assert "password_hash" in dir(user)
         assert "password_hash" not in body
         assert "password" not in body
@@ -209,18 +213,18 @@ class TestSessionLifecycle:
 
         # Even replaying the old cookie fails: revocation is server-side.
         client.cookies.set("originlens_session", token or "")
-        assert client.get("/api/v1/auth/session").status_code == 401
+        assert client.get("/api/v1/auth/session").json()["user"] is None
 
     def test_revoked_session_cannot_be_reused(self, client: TestClient, db: OrmSession) -> None:
         from app.auth.sessions import revoke_all_for_user
 
         user = make_user(db, email="revoked@example.com")
         login(client, user.email)
-        assert client.get("/api/v1/auth/session").status_code == 200
+        assert client.get("/api/v1/auth/session").json()["user"] is not None
 
         revoke_all_for_user(db, user.id)
         db.commit()
-        assert client.get("/api/v1/auth/session").status_code == 401
+        assert client.get("/api/v1/auth/session").json()["user"] is None
 
     def test_expired_session_is_refused(self, client: TestClient, db: OrmSession) -> None:
         from datetime import datetime, timedelta
@@ -237,7 +241,7 @@ class TestSessionLifecycle:
         db.add(session)
         db.commit()
 
-        assert client.get("/api/v1/auth/session").status_code == 401
+        assert client.get("/api/v1/auth/session").json()["user"] is None
 
 
 class TestCsrf:
@@ -285,7 +289,7 @@ class TestCsrf:
     ) -> None:
         user = make_user(db, email="csrf4@example.com")
         login(client, user.email)
-        assert client.get("/api/v1/auth/session").status_code == 200
+        assert client.get("/api/v1/auth/session").json()["user"] is not None
 
 
 class TestPasswordReset:
@@ -318,7 +322,7 @@ class TestPasswordReset:
         assert response.status_code == 200
 
         # The old session is gone and the new password works.
-        assert client.get("/api/v1/auth/session").status_code == 401
+        assert client.get("/api/v1/auth/session").json()["user"] is None
         assert login(client, user.email, new_password).status_code == 200
 
     def test_reset_token_is_single_use(self, client: TestClient, db: OrmSession) -> None:

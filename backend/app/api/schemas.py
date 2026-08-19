@@ -84,6 +84,18 @@ class UserProfile(BaseModel):
     created_at: datetime
 
 
+class SessionResponse(BaseModel):
+    """Answer to "who am I".
+
+    ``user`` is null for an anonymous caller. This deliberately returns 200
+    rather than 401: not being signed in is a valid answer to the question, and
+    a 401 on every page load fills the browser console with errors that then
+    hide real ones.
+    """
+
+    user: UserProfile | None = None
+
+
 class MessageResponse(BaseModel):
     message: str
 

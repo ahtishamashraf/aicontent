@@ -128,3 +128,24 @@ class TestDerivedValues:
     def test_invalid_log_level_is_rejected(self) -> None:
         with pytest.raises(ValidationError):
             Settings(_env_file=None, log_level="chatty")
+
+
+class TestRateLimitMultiplier:
+    def test_default_is_one(self) -> None:
+        assert Settings(_env_file=None).rate_limit_multiplier == 1.0
+
+    def test_development_may_raise_it_for_a_test_stack(self) -> None:
+        assert Settings(_env_file=None, rate_limit_multiplier=50).rate_limit_multiplier == 50
+
+    def test_production_refuses_a_loosened_multiplier(self) -> None:
+        config = SAFE_PRODUCTION | {"rate_limit_multiplier": 10.0}
+        with pytest.raises(ValidationError, match="RATE_LIMIT_MULTIPLIER"):
+            Settings(**config)  # type: ignore[arg-type]
+
+    def test_production_accepts_the_default(self) -> None:
+        config = SAFE_PRODUCTION | {"rate_limit_multiplier": 1.0}
+        assert Settings(**config).rate_limit_multiplier == 1.0  # type: ignore[arg-type]
+
+    def test_zero_or_negative_is_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            Settings(_env_file=None, rate_limit_multiplier=0)

@@ -20,6 +20,7 @@ from sqlalchemy import select
 from app.api.deps import (
     CurrentUserDep,
     DbDep,
+    OptionalUserDep,
     SettingsDep,
     client_identifier,
     enforce_rate_limit,
@@ -32,6 +33,7 @@ from app.api.schemas import (
     RegisterRequest,
     ResendVerificationRequest,
     ResetPasswordRequest,
+    SessionResponse,
     UserProfile,
     VerifyEmailRequest,
 )
@@ -259,10 +261,15 @@ def logout(
     return MessageResponse(message="Signed out.")
 
 
-@router.get("/session", response_model=UserProfile)
-def current_session(user: CurrentUserDep) -> UserProfile:
-    """Return the signed-in profile."""
-    return UserProfile.model_validate(user)
+@router.get("/session", response_model=SessionResponse)
+def current_session(user: OptionalUserDep) -> SessionResponse:
+    """Return the signed-in profile, or a null user when anonymous.
+
+    Always 200. See :class:`SessionResponse` for why this is not a 401.
+    """
+    if user is None or user.status is not UserStatus.ACTIVE:
+        return SessionResponse(user=None)
+    return SessionResponse(user=UserProfile.model_validate(user))
 
 
 @router.post("/password/forgot", response_model=MessageResponse)

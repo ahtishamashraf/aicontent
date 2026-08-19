@@ -73,6 +73,12 @@ class Settings(BaseSettings):
     max_upload_bytes: Annotated[int, Field(ge=1024, le=104_857_600)] = 5_242_880
     english_confidence_threshold: Annotated[float, Field(ge=0.0, le=1.0)] = 0.60
 
+    # --- Rate limiting -------------------------------------------------------
+    #: Scales every rate-limit policy. A disposable test stack raises this so an
+    #: end-to-end run is not throttled by production-strength limits; production
+    #: is capped at 1.0 by the posture check below so it cannot be loosened.
+    rate_limit_multiplier: Annotated[float, Field(gt=0.0, le=100.0)] = 1.0
+
     # --- Sessions ------------------------------------------------------------
     session_ttl_seconds: Annotated[int, Field(ge=300, le=31_536_000)] = 1_209_600
     session_idle_timeout_seconds: Annotated[int, Field(ge=300, le=31_536_000)] = 604_800
@@ -185,6 +191,8 @@ class Settings(BaseSettings):
                 "ORIGINLENS_ENCRYPTION_KEY still contains a development placeholder value"
             )
 
+        if self.rate_limit_multiplier > 1.0:
+            problems.append("ORIGINLENS_RATE_LIMIT_MULTIPLIER must not exceed 1.0 in production")
         if self.metrics_enabled and not self.metrics_token:
             problems.append(
                 "ORIGINLENS_METRICS_TOKEN is required when metrics are enabled in production"
