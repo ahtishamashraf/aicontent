@@ -236,8 +236,12 @@ class ModernBertProvider:
         assert self._ai_index is not None
         for window in windows:
             try:
+                # prepend_batch_axis is load-bearing: without it the tensors are
+                # 1-D and the model unpacks the shape as (batch, seq) and fails.
                 encoded = self._tokenizer.prepare_for_model(
-                    list(window.token_ids), return_tensors="pt"
+                    list(window.token_ids),
+                    return_tensors="pt",
+                    prepend_batch_axis=True,
                 ).to(self._device)
                 with torch.inference_mode():
                     logits = self._model(**encoded).logits
