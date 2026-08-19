@@ -143,7 +143,5 @@ async def unhandled_error_handler(request: Request, exc: Exception) -> JSONRespo
     """Render any unexpected error without leaking internals."""
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content=error_body(
-            InternalError.code, InternalError.message, correlation_id_of(request)
-        ),
+        content=error_body(InternalError.code, InternalError.message, correlation_id_of(request)),
     )

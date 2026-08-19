@@ -50,7 +50,7 @@ class UserRole(str, enum.Enum):
 
 
 class UserStatus(str, enum.Enum):
-    PENDING = "pending"      # registered, email not yet verified
+    PENDING = "pending"  # registered, email not yet verified
     ACTIVE = "active"
     SUSPENDED = "suspended"
 
@@ -69,7 +69,7 @@ class AnalysisSource(str, enum.Enum):
 
 class TokenPurpose(str, enum.Enum):
     EMAIL_VERIFICATION = "email_verification"
-    PASSWORD_RESET = "password_reset"
+    PASSWORD_RESET = "password_reset"  # noqa: S105 - enum member, not a credential
 
 
 class ReliabilityLevel(str, enum.Enum):
@@ -247,9 +247,7 @@ class AnalysisSegment(UUIDPrimaryKeyMixin, Base):
     """One paragraph of an analysis, in stable document order."""
 
     __tablename__ = "analysis_segments"
-    __table_args__ = (
-        UniqueConstraint("analysis_id", "index", name="uq_segment_order"),
-    )
+    __table_args__ = (UniqueConstraint("analysis_id", "index", name="uq_segment_order"),)
 
     analysis_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("analyses.id", ondelete="CASCADE"), index=True, nullable=False

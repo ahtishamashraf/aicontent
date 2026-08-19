@@ -51,7 +51,8 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
 
     # --- Secrets -------------------------------------------------------------
-    secret_key: str = "dev_only_secret_key_not_for_production_use_change_me"
+    # Development default only; _validate_production_posture refuses it in production.
+    secret_key: str = "dev_only_secret_key_not_for_production_use_change_me"  # noqa: S105
     encryption_key: str = "b3JpZ2lubGVucy1kZXYtb25seS1rZXktQ0hBTkdFTUU="
     rate_limit_pepper: str = "dev_only_rate_limit_pepper_change_me"
 
@@ -122,7 +123,7 @@ class Settings(BaseSettings):
     def _validate_encryption_key(cls, value: str) -> str:
         try:
             raw = base64.urlsafe_b64decode(value)
-        except Exception as exc:  # noqa: BLE001 - surfaced as a config error
+        except Exception as exc:
             raise ValueError(
                 "ORIGINLENS_ENCRYPTION_KEY must be urlsafe base64 of 32 random bytes"
             ) from exc

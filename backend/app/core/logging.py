@@ -45,9 +45,7 @@ REDACTED = "[redacted]"
 
 #: Keys that carry free-form submitted content. Once one appears in a log line,
 #: the remainder of that line is unbounded content and is dropped entirely.
-CONTENT_KEYS = frozenset(
-    {"text", "content", "original_text", "display_text", "analysis_text"}
-)
+CONTENT_KEYS = frozenset({"text", "content", "original_text", "display_text", "analysis_text"})
 
 #: ``key=value`` / ``key: value`` for discrete secrets — redact the single token.
 _INLINE_SECRET = re.compile(
