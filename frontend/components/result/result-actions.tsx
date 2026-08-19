@@ -51,8 +51,9 @@ export function ResultActions({ analysis }: { analysis: Analysis }) {
       <span aria-live="polite" className="sr-only">
         {copied ? "Link copied to clipboard" : ""}
       </span>
-      {/* Hidden anchor drives the download without leaving a stray element visible. */}
-      <a ref={anchorRef} className="hidden" aria-hidden="true" tabIndex={-1} href="#">
+      {/* Hidden anchor drives the download. It carries no href until one is
+          assigned, so it is not a link and cannot be followed or focused. */}
+      <a ref={anchorRef} className="hidden" aria-hidden="true" tabIndex={-1}>
         download
       </a>
     </div>
