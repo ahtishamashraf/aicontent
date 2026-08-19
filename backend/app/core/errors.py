@@ -27,7 +27,7 @@ class AppError(Exception):
 
 
 class ValidationFailed(AppError):
-    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
     code = "validation_failed"
     message = "The submitted values are not valid."
 
@@ -71,7 +71,7 @@ class Conflict(AppError):
 
 
 class PayloadTooLarge(AppError):
-    status_code = status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+    status_code = status.HTTP_413_CONTENT_TOO_LARGE
     code = "payload_too_large"
     message = "The submission exceeds the configured size limit."
 
