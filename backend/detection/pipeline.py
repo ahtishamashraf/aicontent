@@ -217,7 +217,7 @@ def analyse(
     # --- Length gate: cheapest rejection first, before any inference ---------
     if word_count < settings.min_words:
         base.reliability_reasons = [
-            f"At least {settings.min_words} words are required; " f"{word_count} were submitted."
+            f"At least {settings.min_words} words are required; {word_count} were submitted."
         ]
         return base
 
@@ -229,8 +229,7 @@ def analyse(
         base.label = Label.UNSUPPORTED_LANGUAGE.value
         base.reliability = Reliability.INSUFFICIENT.value
         base.reliability_reasons = [
-            "This analyser is validated for English only. Detected language: "
-            f"{verdict.language}."
+            f"This analyser is validated for English only. Detected language: {verdict.language}."
         ]
         return base
 

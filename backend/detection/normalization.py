@@ -171,7 +171,7 @@ def inspect_integrity(text: str) -> list[IntegrityWarning]:
         warnings.append(
             IntegrityWarning(
                 "excessive_whitespace",
-                "Unusually long runs of whitespace or blank lines were collapsed " "for analysis.",
+                "Unusually long runs of whitespace or blank lines were collapsed for analysis.",
             )
         )
 

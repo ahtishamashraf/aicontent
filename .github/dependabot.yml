@@ -1,0 +1,40 @@
+version: 2
+
+updates:
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # Patch and minor bumps are usually safe to review together; majors are
+      # deliberately left as individual PRs so each is assessed on its own.
+      backend-minor-patch:
+        update-types: [minor, patch]
+    ignore:
+      # Torch and Transformers majors change model loading semantics and must
+      # be validated against a real checkpoint before adoption. Review these by
+      # hand rather than merging because CI is green.
+      - dependency-name: torch
+        update-types: [version-update:semver-major]
+      - dependency-name: transformers
+        update-types: [version-update:semver-major]
+    labels: [dependencies, backend]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      frontend-minor-patch:
+        update-types: [minor, patch]
+    labels: [dependencies, frontend]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    labels: [dependencies, ci]

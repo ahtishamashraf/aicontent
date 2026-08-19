@@ -1,0 +1,107 @@
+# Development stack.
+#
+# Ports are published on localhost so you can reach the databases from your
+# editor and from the test suite. The production reference file
+# (docker-compose.prod.yml) deliberately does not publish them.
+
+name: originlens
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: originlens
+      POSTGRES_PASSWORD: originlens
+      POSTGRES_DB: originlens
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U originlens -d originlens"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "127.0.0.1:1025:1025"   # SMTP
+      - "127.0.0.1:8025:8025"   # Web UI
+    environment:
+      MP_MAX_MESSAGES: "500"
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: originlens-api:latest
+    env_file: .env
+    environment:
+      ORIGINLENS_DATABASE_URL: postgresql+psycopg://originlens:originlens@postgres:5432/originlens
+      ORIGINLENS_REDIS_URL: redis://redis:6379/0
+      ORIGINLENS_SMTP_HOST: mailpit
+      ORIGINLENS_SMTP_PORT: "1025"
+      ORIGINLENS_CORS_ORIGINS: http://localhost:3000
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Give in-flight requests time to drain rather than cutting them off.
+    stop_grace_period: 30s
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    image: originlens-worker:latest
+    env_file: .env
+    environment:
+      ORIGINLENS_DATABASE_URL: postgresql+psycopg://originlens:originlens@postgres:5432/originlens
+      ORIGINLENS_REDIS_URL: redis://redis:6379/0
+      ORIGINLENS_SMTP_HOST: mailpit
+      ORIGINLENS_SMTP_PORT: "1025"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+    volumes:
+      # Persist the model cache so weights survive a rebuild.
+      - model-cache:/home/originlens/.cache/huggingface
+    stop_grace_period: 60s
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: originlens-web:latest
+    environment:
+      API_INTERNAL_URL: http://api:8000
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - api
+    stop_grace_period: 20s
+
+volumes:
+  postgres-data:
+  model-cache:

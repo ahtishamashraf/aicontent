@@ -131,7 +131,7 @@ def repeated_sentence_openings(text: str, opening_words: int = 2) -> float:
 def punctuation_distribution(text: str) -> dict[str, float]:
     """Occurrences of each tracked mark per 1,000 characters."""
     if not text:
-        return {mark: 0.0 for mark in TRACKED_PUNCTUATION}
+        return dict.fromkeys(TRACKED_PUNCTUATION, 0.0)
     scale = 1000.0 / len(text)
     return {mark: round(text.count(mark) * scale, 4) for mark in TRACKED_PUNCTUATION}
 

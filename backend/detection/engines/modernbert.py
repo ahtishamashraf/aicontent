@@ -66,6 +66,8 @@ class ModernBertProvider:
         self._device: str = "cpu"
         self._ai_index: int | None = None
         self._label_names: dict[int, str] = {}
+        self._special_prefix: list[int] = []
+        self._special_suffix: list[int] = []
         self._resolved_commit: str | None = None
         self._torch_version: str | None = None
         self._transformers_version: str | None = None
@@ -129,7 +131,32 @@ class ModernBertProvider:
             self._model.eval()
 
             self._ai_index = self._resolve_ai_index(self._model.config)
+            self._special_prefix, self._special_suffix = self._derive_special_tokens()
             self._resolved_commit = self._read_commit_hash()
+
+    def _derive_special_tokens(self) -> tuple[list[int], list[int]]:
+        """Discover the ids the tokenizer wraps content in.
+
+        Encoding one probe token with and without special tokens and diffing
+        the two gives the prefix and suffix for any architecture. This avoids
+        ``build_inputs_with_special_tokens`` and ``prepare_for_model``, both of
+        which Transformers 5 removed, and avoids hard-coding [CLS]/[SEP], which
+        would be wrong for models that use different markers.
+        """
+        probe = "text"
+        try:
+            bare = list(self._tokenizer(probe, add_special_tokens=False)["input_ids"])
+            wrapped = list(self._tokenizer(probe, add_special_tokens=True)["input_ids"])
+        except Exception:  # Any tokenizer failure: fall back to no wrapper.
+            return [], []
+
+        if not bare or len(wrapped) < len(bare):
+            return [], []
+
+        for start in range(len(wrapped) - len(bare) + 1):
+            if wrapped[start : start + len(bare)] == bare:
+                return wrapped[:start], wrapped[start + len(bare) :]
+        return [], []
 
     def _read_commit_hash(self) -> str | None:
         """Best-effort resolved commit for provenance."""
@@ -150,7 +177,7 @@ class ModernBertProvider:
         id2label = getattr(config, "id2label", None)
         if not isinstance(id2label, dict) or not id2label:
             raise LabelMappingError(
-                "Model config has no id2label mapping, so the AI class cannot be " "identified"
+                "Model config has no id2label mapping, so the AI class cannot be identified"
             )
 
         labels = {int(idx): str(name).strip().lower() for idx, name in id2label.items()}
@@ -224,8 +251,8 @@ class ModernBertProvider:
         if not token_ids:
             return WindowScores(scores=[], token_weights=[])
 
-        # Reserve room for the special tokens the tokenizer adds back.
-        special = int(self._tokenizer.num_special_tokens_to_add(pair=False))
+        # Reserve room for the special tokens the tokenizer wraps content in.
+        special = len(self._special_prefix) + len(self._special_suffix)
         content_budget = max(1, self.max_tokens - special)
         stride = min(self.stride, content_budget)
 
@@ -236,15 +263,15 @@ class ModernBertProvider:
         assert self._ai_index is not None
         for window in windows:
             try:
-                # prepend_batch_axis is load-bearing: without it the tensors are
-                # 1-D and the model unpacks the shape as (batch, seq) and fails.
-                encoded = self._tokenizer.prepare_for_model(
-                    list(window.token_ids),
-                    return_tensors="pt",
-                    prepend_batch_axis=True,
-                ).to(self._device)
+                # Build the model inputs explicitly rather than through
+                # prepare_for_model, which Transformers 5 removed. The batch
+                # axis is load-bearing: a 1-D tensor makes the model unpack the
+                # shape as (batch, seq) and fail.
+                ids = self._special_prefix + list(window.token_ids) + self._special_suffix
+                input_ids = torch.tensor([ids], dtype=torch.long, device=self._device)
+                attention_mask = torch.ones_like(input_ids)
                 with torch.inference_mode():
-                    logits = self._model(**encoded).logits
+                    logits = self._model(input_ids=input_ids, attention_mask=attention_mask).logits
                 probabilities = torch.softmax(logits.float(), dim=-1)
                 value = float(probabilities[0, self._ai_index].item())
             except Exception as exc:

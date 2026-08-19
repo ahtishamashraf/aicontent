@@ -1,0 +1,128 @@
+# Production reference stack.
+#
+# This is a starting point to adapt, not a turnkey deployment. Differences from
+# the development file that are deliberate:
+#
+#   * PostgreSQL and Redis publish no ports. They are reachable only on the
+#     internal network. Exposing a database port to the host is how a
+#     development convenience becomes a production incident.
+#   * Every secret comes from the environment with no default, so a missing
+#     value fails the deploy rather than silently starting with a placeholder.
+#     The application's own settings validation refuses placeholder secrets,
+#     debug mode, insecure cookies, and the fake detector in production.
+#   * The API and web containers sit behind a reverse proxy that terminates
+#     TLS. See docs/DEPLOYMENT.md.
+
+name: originlens-prod
+
+x-restart: &restart
+  restart: unless-stopped
+
+services:
+  postgres:
+    <<: *restart
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # No `ports:` — intentionally unreachable from outside the compose network.
+
+  redis:
+    <<: *restart
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "no"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # No `ports:` — intentionally unreachable from outside the compose network.
+
+  api:
+    <<: *restart
+    image: ${API_IMAGE:-originlens-api:latest}
+    environment:
+      ORIGINLENS_ENVIRONMENT: production
+      ORIGINLENS_DEBUG: "false"
+      ORIGINLENS_COOKIE_SECURE: "true"
+      ORIGINLENS_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      ORIGINLENS_REDIS_URL: redis://redis:6379/0
+      ORIGINLENS_SECRET_KEY: ${ORIGINLENS_SECRET_KEY:?ORIGINLENS_SECRET_KEY is required}
+      ORIGINLENS_ENCRYPTION_KEY: ${ORIGINLENS_ENCRYPTION_KEY:?ORIGINLENS_ENCRYPTION_KEY is required}
+      ORIGINLENS_RATE_LIMIT_PEPPER: ${ORIGINLENS_RATE_LIMIT_PEPPER:?ORIGINLENS_RATE_LIMIT_PEPPER is required}
+      ORIGINLENS_ALLOWED_HOSTS: ${ORIGINLENS_ALLOWED_HOSTS:?ORIGINLENS_ALLOWED_HOSTS is required}
+      ORIGINLENS_CORS_ORIGINS: ${ORIGINLENS_CORS_ORIGINS:?ORIGINLENS_CORS_ORIGINS is required}
+      ORIGINLENS_DETECTOR_BACKEND: ${ORIGINLENS_DETECTOR_BACKEND:-modernbert}
+      ORIGINLENS_MODEL_ID: ${ORIGINLENS_MODEL_ID:?ORIGINLENS_MODEL_ID is required}
+      ORIGINLENS_MODEL_REVISION: ${ORIGINLENS_MODEL_REVISION:-}
+      ORIGINLENS_SMTP_HOST: ${ORIGINLENS_SMTP_HOST:?ORIGINLENS_SMTP_HOST is required}
+      ORIGINLENS_SMTP_PORT: ${ORIGINLENS_SMTP_PORT:-587}
+      ORIGINLENS_SMTP_USERNAME: ${ORIGINLENS_SMTP_USERNAME:-}
+      ORIGINLENS_SMTP_PASSWORD: ${ORIGINLENS_SMTP_PASSWORD:-}
+      ORIGINLENS_SMTP_USE_TLS: ${ORIGINLENS_SMTP_USE_TLS:-true}
+      ORIGINLENS_EMAIL_FROM: ${ORIGINLENS_EMAIL_FROM:?ORIGINLENS_EMAIL_FROM is required}
+    expose:
+      - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    stop_grace_period: 30s
+
+  worker:
+    <<: *restart
+    image: ${WORKER_IMAGE:-originlens-worker:latest}
+    environment:
+      ORIGINLENS_ENVIRONMENT: production
+      ORIGINLENS_DEBUG: "false"
+      ORIGINLENS_COOKIE_SECURE: "true"
+      ORIGINLENS_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      ORIGINLENS_REDIS_URL: redis://redis:6379/0
+      ORIGINLENS_SECRET_KEY: ${ORIGINLENS_SECRET_KEY}
+      ORIGINLENS_ENCRYPTION_KEY: ${ORIGINLENS_ENCRYPTION_KEY}
+      ORIGINLENS_RATE_LIMIT_PEPPER: ${ORIGINLENS_RATE_LIMIT_PEPPER}
+      ORIGINLENS_ALLOWED_HOSTS: ${ORIGINLENS_ALLOWED_HOSTS}
+      ORIGINLENS_CORS_ORIGINS: ${ORIGINLENS_CORS_ORIGINS}
+      ORIGINLENS_DETECTOR_BACKEND: ${ORIGINLENS_DETECTOR_BACKEND:-modernbert}
+      ORIGINLENS_MODEL_ID: ${ORIGINLENS_MODEL_ID}
+      ORIGINLENS_MODEL_REVISION: ${ORIGINLENS_MODEL_REVISION:-}
+      ORIGINLENS_EMAIL_FROM: ${ORIGINLENS_EMAIL_FROM}
+      ORIGINLENS_SMTP_HOST: ${ORIGINLENS_SMTP_HOST}
+    volumes:
+      # Model weights are large; a named volume avoids re-downloading them on
+      # every deploy and lets an air-gapped host be seeded in advance.
+      - model-cache:/home/originlens/.cache/huggingface
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    stop_grace_period: 120s
+
+  web:
+    <<: *restart
+    image: ${WEB_IMAGE:-originlens-web:latest}
+    environment:
+      NODE_ENV: production
+      API_INTERNAL_URL: http://api:8000
+    expose:
+      - "3000"
+    depends_on:
+      - api
+    stop_grace_period: 20s
+
+volumes:
+  postgres-data:
+  redis-data:
+  model-cache:

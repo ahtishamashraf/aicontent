@@ -64,8 +64,9 @@ def _database() -> Iterator[None]:
     os.environ["ORIGINLENS_DETECTOR_BACKEND"] = "fake"
     os.environ["ORIGINLENS_COOKIE_SECURE"] = "false"
 
-    from alembic import command
     from alembic.config import Config
+
+    from alembic import command
     from app.core.config import get_settings
 
     get_settings.cache_clear()

@@ -75,8 +75,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title=f"{PRODUCT_NAME} API",
         version="1.0.0",
         description=(
-            "Signals about how writing was produced. Scores are estimates, not "
-            "proof of authorship."
+            "Signals about how writing was produced. Scores are estimates, not proof of authorship."
         ),
         lifespan=lifespan,
         # Interactive docs are useful in development and noise in production.

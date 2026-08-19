@@ -44,35 +44,35 @@ def _pg_enum(enum_cls: type[enum.Enum], name: str) -> Enum:
     )
 
 
-class UserRole(str, enum.Enum):
+class UserRole(enum.StrEnum):
     USER = "user"
     ADMIN = "admin"
 
 
-class UserStatus(str, enum.Enum):
+class UserStatus(enum.StrEnum):
     PENDING = "pending"  # registered, email not yet verified
     ACTIVE = "active"
     SUSPENDED = "suspended"
 
 
-class AnalysisStatus(str, enum.Enum):
+class AnalysisStatus(enum.StrEnum):
     QUEUED = "queued"
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
 
 
-class AnalysisSource(str, enum.Enum):
+class AnalysisSource(enum.StrEnum):
     TEXT = "text"
     DOCUMENT = "document"
 
 
-class TokenPurpose(str, enum.Enum):
+class TokenPurpose(enum.StrEnum):
     EMAIL_VERIFICATION = "email_verification"
     PASSWORD_RESET = "password_reset"  # noqa: S105 - enum member, not a credential
 
 
-class ReliabilityLevel(str, enum.Enum):
+class ReliabilityLevel(enum.StrEnum):
     INSUFFICIENT = "insufficient"
     LOW = "low"
     MODERATE = "moderate"

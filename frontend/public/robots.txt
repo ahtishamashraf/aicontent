@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /$
+Allow: /analyze
+Allow: /methodology
+Allow: /limitations
+Allow: /privacy
+Allow: /terms
+# Results are private to the person who ran them and must never be indexed.
+Disallow: /result/
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /account
+Disallow: /api/

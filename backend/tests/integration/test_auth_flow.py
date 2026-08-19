@@ -183,9 +183,7 @@ class TestLogin:
 
 
 class TestSessionLifecycle:
-    def test_anonymous_session_returns_a_null_user_not_an_error(
-        self, client: TestClient
-    ) -> None:
+    def test_anonymous_session_returns_a_null_user_not_an_error(self, client: TestClient) -> None:
         # 200 with user=null, so an anonymous page load does not log a console
         # error on every request.
         response = client.get("/api/v1/auth/session")

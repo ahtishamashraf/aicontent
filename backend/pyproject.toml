@@ -3,39 +3,43 @@ name = "originlens-backend"
 version = "1.0.0"
 description = "OriginLens — AI writing signal analysis API"
 requires-python = ">=3.11"
+# Lower bounds only. The exact resolved set that ships in the images is pinned
+# in requirements.lock, regenerated with `make lock`. Bounds are raised when an
+# advisory requires it rather than tracking latest for its own sake.
 dependencies = [
-    "fastapi==0.115.6",
-    "uvicorn[standard]==0.34.0",
-    "pydantic==2.10.4",
-    "pydantic-settings==2.7.0",
-    "sqlalchemy==2.0.36",
-    "alembic==1.14.0",
-    "psycopg[binary]==3.2.3",
-    "redis==5.2.1",
-    "celery==5.4.0",
-    "argon2-cffi==23.1.0",
-    "cryptography==44.0.0",
-    "python-multipart==0.0.20",
-    "email-validator==2.2.0",
-    "pypdf==5.1.0",
-    "python-docx==1.1.2",
-    "charset-normalizer==3.4.1",
-    "langdetect==1.0.9",
+    "fastapi>=0.128",
+    "uvicorn[standard]>=0.38",
+    "pydantic>=2.12",
+    "pydantic-settings>=2.8",
+    "sqlalchemy>=2.0.36",
+    "alembic>=1.14",
+    "psycopg[binary]>=3.2.3",
+    "redis>=5.2.1",
+    "celery>=5.4",
+    "argon2-cffi>=23.1",
+    "cryptography>=46.0.6",
+    "python-multipart>=0.0.31",
+    "email-validator>=2.2",
+    "pypdf>=6.15",
+    "python-docx>=1.1.2",
+    "charset-normalizer>=3.4.1",
+    "langdetect>=1.0.9",
 ]
 
 [project.optional-dependencies]
 ml = [
-    "torch==2.5.1",
-    "transformers==4.48.0",
+    "torch>=2.5.1",
+    "transformers>=5.5",
 ]
 dev = [
-    "pytest==8.3.4",
-    "pytest-asyncio==0.25.1",
-    "httpx==0.28.1",
-    "ruff==0.8.6",
-    "mypy==1.14.1",
-    "types-redis==4.6.0.20241004",
-    "celery-types==0.22.0",
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.0",
+    "httpx>=0.28.1",
+    "ruff>=0.14",
+    "mypy>=1.18",
+    "pip-audit>=2.7",
+    "types-redis>=4.6",
+    "celery-types>=0.22",
 ]
 
 [build-system]

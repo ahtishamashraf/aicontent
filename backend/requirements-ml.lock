@@ -1,0 +1,49 @@
+# Optional machine-learning dependencies for the real detector backend.
+#
+# Installed only in images that run ORIGINLENS_DETECTOR_BACKEND=modernbert.
+# These pins are the default PyPI (CUDA) builds. For a CPU-only
+# deployment install torch from the CPU index instead:
+#   pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu
+# which drops the nvidia-* wheels and roughly 2 GB of image size.
+#
+# Regenerate with:  make lock
+filelock==3.32.3
+fsspec==2026.7.0
+huggingface-hub==1.28.0
+mpmath==1.3.0
+networkx==3.6.1
+numpy==2.4.6
+nvidia-cublas-cu12==12.4.5.8
+nvidia-cublas==13.1.1.3
+nvidia-cuda-cupti-cu12==12.4.127
+nvidia-cuda-cupti==13.0.85
+nvidia-cuda-nvrtc-cu12==12.4.127
+nvidia-cuda-nvrtc==13.0.88
+nvidia-cuda-runtime-cu12==12.4.127
+nvidia-cuda-runtime==13.0.96
+nvidia-cudnn-cu12==9.1.0.70
+nvidia-cudnn-cu13==9.20.0.48
+nvidia-cufft-cu12==11.2.1.3
+nvidia-cufft==12.0.0.61
+nvidia-cufile==1.15.1.6
+nvidia-curand-cu12==10.3.5.147
+nvidia-curand==10.4.0.35
+nvidia-cusolver-cu12==11.6.1.9
+nvidia-cusolver==12.0.4.66
+nvidia-cusparse-cu12==12.3.1.170
+nvidia-cusparse==12.6.3.3
+nvidia-cusparselt-cu13==0.8.1
+nvidia-nccl-cu12==2.21.5
+nvidia-nccl-cu13==2.29.7
+nvidia-nvjitlink-cu12==12.4.127
+nvidia-nvjitlink==13.3.33
+nvidia-nvshmem-cu13==3.4.5
+nvidia-nvtx-cu12==12.4.127
+nvidia-nvtx==13.0.85
+regex==2026.7.19
+safetensors==0.8.0
+sympy==1.14.0
+tokenizers==0.22.2
+torch==2.13.0
+transformers==5.15.1
+triton==3.7.1

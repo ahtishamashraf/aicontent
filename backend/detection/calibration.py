@@ -17,7 +17,7 @@ renders what it is given.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 #: Bump whenever a threshold, band, or the mapping function changes.
 CALIBRATION_VERSION = "identity-1.0.0"
@@ -26,7 +26,7 @@ CALIBRATION_VERSION = "identity-1.0.0"
 DETECTOR_VERSION = "1.0.0"
 
 
-class Label(str, Enum):
+class Label(StrEnum):
     HUMAN_PATTERNED = "Likely human-patterned"
     UNCERTAIN = "Uncertain or mixed signals"
     AI_PATTERNED = "Likely AI-patterned"
@@ -34,7 +34,7 @@ class Label(str, Enum):
     UNSUPPORTED_LANGUAGE = "Unsupported language"
 
 
-class Reliability(str, Enum):
+class Reliability(StrEnum):
     INSUFFICIENT = "insufficient"
     LOW = "low"
     MODERATE = "moderate"
@@ -77,7 +77,7 @@ def calibrate(raw_score: float) -> int:
     Currently the identity mapping. See the module docstring.
     """
     clamped = min(max(raw_score, 0.0), 1.0)
-    return int(round(clamped * 100))
+    return round(clamped * 100)
 
 
 def band_for(score: int) -> Label:
@@ -145,7 +145,7 @@ def assess_reliability(
     if "homoglyph_risk" in integrity_warning_codes:
         level = Reliability.LOW if level != Reliability.INSUFFICIENT else level
         reasons.append(
-            "Characters from another script resemble Latin letters, which can " "distort analysis."
+            "Characters from another script resemble Latin letters, which can distort analysis."
         )
     if "invisible_characters" in integrity_warning_codes:
         if level == Reliability.NORMAL:

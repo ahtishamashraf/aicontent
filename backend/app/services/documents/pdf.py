@@ -43,14 +43,14 @@ def extract_pdf(payload: bytes) -> ExtractionResult:
             if reader.decrypt("") == 0:
                 raise DocumentRejectedError(
                     "encrypted_pdf",
-                    "This PDF is password-protected. Remove the protection and " "upload it again.",
+                    "This PDF is password-protected. Remove the protection and upload it again.",
                 )
         except DocumentRejectedError:
             raise
         except Exception:
             raise DocumentRejectedError(
                 "encrypted_pdf",
-                "This PDF is password-protected. Remove the protection and " "upload it again.",
+                "This PDF is password-protected. Remove the protection and upload it again.",
             ) from None
 
     notes: list[str] = []

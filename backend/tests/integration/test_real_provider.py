@@ -34,11 +34,35 @@ VOCAB = (
     ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
     + [chr(c) for c in range(97, 123)]
     + [
-        "the", "committee", "reviewed", "proposal", "timeline", "staffing",
-        "chair", "archive", "migration", "recruitment", "session", "members",
-        "concerns", "delivery", "schedule", "meeting", "department",
-        "vacancies", "workload", "candidates", ".", ",", "and", "a", "of",
-        "to", "in", "that", "was",
+        "the",
+        "committee",
+        "reviewed",
+        "proposal",
+        "timeline",
+        "staffing",
+        "chair",
+        "archive",
+        "migration",
+        "recruitment",
+        "session",
+        "members",
+        "concerns",
+        "delivery",
+        "schedule",
+        "meeting",
+        "department",
+        "vacancies",
+        "workload",
+        "candidates",
+        ".",
+        ",",
+        "and",
+        "a",
+        "of",
+        "to",
+        "in",
+        "that",
+        "was",
     ]
 )
 
@@ -74,17 +98,13 @@ def _build_checkpoint(
         id2label=id2label,
         label2id=label2id or {v: k for k, v in id2label.items()},
     )
-    BertForSequenceClassification(config).save_pretrained(
-        directory, safe_serialization=True
-    )
+    BertForSequenceClassification(config).save_pretrained(directory, safe_serialization=True)
     return str(directory)
 
 
 @pytest.fixture(scope="module")
 def checkpoint(tmp_path_factory: pytest.TempPathFactory) -> str:
-    return _build_checkpoint(
-        tmp_path_factory.mktemp("detector"), {0: "human", 1: "ai"}
-    )
+    return _build_checkpoint(tmp_path_factory.mktemp("detector"), {0: "human", 1: "ai"})
 
 
 @pytest.fixture(scope="module")
@@ -102,24 +122,18 @@ class TestLoading:
         provider.load()
         assert provider.is_loaded is True
 
-    def test_ai_label_index_is_resolved_from_the_config(
-        self, provider: ModernBertProvider
-    ) -> None:
+    def test_ai_label_index_is_resolved_from_the_config(self, provider: ModernBertProvider) -> None:
         assert provider.metadata()["ai_label_index"] == 1
         assert provider.metadata()["label_names"] == {0: "human", 1: "ai"}
 
-    def test_reversed_labels_resolve_to_the_other_index(
-        self, tmp_path: pathlib.Path
-    ) -> None:
+    def test_reversed_labels_resolve_to_the_other_index(self, tmp_path: pathlib.Path) -> None:
         # The same weights with swapped labels must flip which index is read.
         path = _build_checkpoint(tmp_path / "reversed", {0: "ai", 1: "human"})
         instance = ModernBertProvider(path, device="cpu", max_tokens=64, stride=48)
         instance.load()
         assert instance.metadata()["ai_label_index"] == 0
 
-    def test_generic_labels_are_refused_at_load_time(
-        self, tmp_path: pathlib.Path
-    ) -> None:
+    def test_generic_labels_are_refused_at_load_time(self, tmp_path: pathlib.Path) -> None:
         path = _build_checkpoint(tmp_path / "generic", {0: "LABEL_0", 1: "LABEL_1"})
         instance = ModernBertProvider(path, device="cpu")
         with pytest.raises(LabelMappingError):
@@ -132,9 +146,7 @@ class TestLoading:
         assert excinfo.value.code == "model_load_failed"
         assert len(excinfo.value.detail) <= 300
 
-    def test_cuda_request_without_a_device_is_refused_not_downgraded(
-        self, checkpoint: str
-    ) -> None:
+    def test_cuda_request_without_a_device_is_refused_not_downgraded(self, checkpoint: str) -> None:
         if torch.cuda.is_available():
             pytest.skip("CUDA is present, so this refusal cannot be observed")
         instance = ModernBertProvider(checkpoint, device="cuda")
@@ -144,16 +156,12 @@ class TestLoading:
 
 
 class TestInference:
-    def test_inference_produces_one_score_per_window(
-        self, provider: ModernBertProvider
-    ) -> None:
+    def test_inference_produces_one_score_per_window(self, provider: ModernBertProvider) -> None:
         result = provider.score_text(SAMPLE)
         assert len(result.scores) >= 2
         assert len(result.scores) == len(result.token_weights)
 
-    def test_every_score_is_finite_and_in_range(
-        self, provider: ModernBertProvider
-    ) -> None:
+    def test_every_score_is_finite_and_in_range(self, provider: ModernBertProvider) -> None:
         for score in provider.score_text(SAMPLE).scores:
             assert score == score, "NaN"
             assert score not in (float("inf"), float("-inf"))
@@ -164,9 +172,7 @@ class TestInference:
     ) -> None:
         assert all(weight <= 64 for weight in provider.score_text(SAMPLE).token_weights)
 
-    def test_inference_is_deterministic_in_eval_mode(
-        self, provider: ModernBertProvider
-    ) -> None:
+    def test_inference_is_deterministic_in_eval_mode(self, provider: ModernBertProvider) -> None:
         assert provider.score_text(SAMPLE).scores == provider.score_text(SAMPLE).scores
 
     def test_empty_text_produces_no_windows(self, provider: ModernBertProvider) -> None:
@@ -190,9 +196,7 @@ class TestInference:
 
 
 class TestProvenance:
-    def test_metadata_records_real_versions_and_device(
-        self, provider: ModernBertProvider
-    ) -> None:
+    def test_metadata_records_real_versions_and_device(self, provider: ModernBertProvider) -> None:
         metadata = provider.metadata()
         assert metadata["is_real_model"] is True
         assert metadata["torch_version"] == torch.__version__
@@ -201,8 +205,6 @@ class TestProvenance:
         assert metadata["calibration_version"]
         assert metadata["detector_version"]
 
-    def test_metadata_carries_no_submitted_text(
-        self, provider: ModernBertProvider
-    ) -> None:
+    def test_metadata_carries_no_submitted_text(self, provider: ModernBertProvider) -> None:
         provider.score_text(SAMPLE)
         assert "committee" not in str(provider.metadata())
