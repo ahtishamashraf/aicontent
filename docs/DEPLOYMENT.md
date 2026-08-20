@@ -41,18 +41,48 @@ default.
 
 ## Deploy
 
-```bash
-docker build -t originlens-api:$TAG ./backend
-docker build -t originlens-worker:$TAG -f ./backend/Dockerfile.worker ./backend
-docker build -t originlens-web:$TAG ./frontend
+### The short version
 
-docker compose -f docker-compose.prod.yml run --rm api alembic upgrade head
-docker compose -f docker-compose.prod.yml up -d
-docker compose -f docker-compose.prod.yml run --rm api python -m app.cli seed-settings
-docker compose -f docker-compose.prod.yml run --rm api python -m app.cli create-admin --email you@example.com
+```bash
+./scripts/generate-secrets.sh     # writes .env.production with fresh secrets
+$EDITOR .env.production           # set your hostname, model, and SMTP details
+./scripts/deploy.sh               # build, migrate, start, wait for readiness
 ```
 
+`deploy.sh` refuses to run with placeholder hostnames, placeholder secrets, or
+the fake detector, then validates the Compose configuration, builds, brings the
+stack up, and polls readiness before reporting success.
+
+Then create the first administrator:
+
+```bash
+COMPOSE="docker compose --env-file .env.production -f docker-compose.prod.yml"
+$COMPOSE run --rm api python -m app.cli seed-settings
+$COMPOSE run --rm api python -m app.cli create-admin --email you@example.com
+```
+
+### What that does
+
+Migrations run as a **one-shot `migrate` container** that must complete before
+the API and worker start, so a redeploy with several replicas cannot race them.
+
+The backend images are three targets of one Dockerfile — `api`, `worker`, and
+`migrate` — sharing every layer up to the entrypoint. They cannot drift in
+dependencies, and none depends on another having been built first.
+
 Images run as a non-root user, contain no compiler, and declare healthchecks.
+
+### Building by hand
+
+```bash
+docker build --target api     -t originlens-api:$TAG     ./backend
+docker build --target worker  -t originlens-worker:$TAG  ./backend
+docker build --target migrate -t originlens-migrate:$TAG ./backend
+docker build                  -t originlens-web:$TAG     ./frontend
+```
+
+Pass `--build-arg INCLUDE_ML=true` to bake PyTorch and Transformers in; the
+production Compose file does this already.
 
 ## Network posture
 
@@ -63,22 +93,88 @@ containers are reached through your reverse proxy.
 
 ### Reverse proxy
 
-Terminate TLS at the proxy and forward to `web:3000`. The web tier proxies
-`/api/v1/*` to `api:8000` internally, which keeps the deployment same-origin so
-the session cookie stays host-only.
+The stack publishes only `web` on `127.0.0.1:3000`. Terminate TLS in front of it.
+The web tier proxies `/api/v1/*` to `api:8000` internally, so the deployment
+stays same-origin and the session cookie stays host-only.
 
-The proxy should:
+#### Caddy
 
-* redirect HTTP to HTTPS and send HSTS (the API sends it when
-  `ORIGINLENS_COOKIE_SECURE` is true);
-* allow a request body slightly above `ORIGINLENS_MAX_UPLOAD_BYTES`;
-* set generous read timeouts for analysis requests;
-* **not** rewrite or strip the `X-Correlation-ID` header.
+Caddy obtains and renews certificates automatically, which makes it the
+shortest path to a correct deployment:
 
-If the proxy is trusted to set `X-Forwarded-For`, review
-`client_identifier()` in `app/api/deps.py` before relying on it. It uses the
-socket peer by default, because a spoofable header would let an attacker evade
-rate limits.
+```caddy
+originlens.example.com {
+    encode zstd gzip
+
+    # Slightly above ORIGINLENS_MAX_UPLOAD_BYTES so the application returns its
+    # own 413 envelope rather than the proxy returning a bare error page.
+    request_body {
+        max_size 6MB
+    }
+
+    reverse_proxy 127.0.0.1:3000 {
+        # Analysis requests are CPU-bound and can take seconds.
+        transport http {
+            read_timeout 120s
+        }
+    }
+}
+```
+
+#### nginx
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name originlens.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/originlens.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/originlens.example.com/privkey.pem;
+
+    # Slightly above ORIGINLENS_MAX_UPLOAD_BYTES.
+    client_max_body_size 6m;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Analysis requests are CPU-bound and can take seconds.
+        proxy_read_timeout 120s;
+    }
+}
+
+server {
+    listen 80;
+    server_name originlens.example.com;
+    return 301 https://$host$request_uri;
+}
+```
+
+Whatever proxy you use, it should:
+
+* redirect HTTP to HTTPS. The API sends HSTS itself when
+  `ORIGINLENS_COOKIE_SECURE` is true.
+* allow a body slightly above `ORIGINLENS_MAX_UPLOAD_BYTES`, so an oversized
+  upload gets the application's JSON error envelope rather than a proxy page.
+* use generous read timeouts, because inference is CPU-bound.
+* **not** rewrite or strip `X-Correlation-ID`, which ties a user report to a log
+  line.
+
+#### A note on `X-Forwarded-For`
+
+Rate limiting uses the **socket peer**, not the forwarded header, because a
+spoofable header would let an attacker evade limits by rotating it. Behind a
+proxy this means every client shares one identifier, and the limits become
+per-deployment rather than per-client.
+
+To use the real client address, adapt `client_identifier()` in
+`app/api/deps.py` to read `X-Forwarded-For` — and only do so once you are
+certain the proxy always overwrites that header rather than appending to a
+client-supplied value.
 
 ## Model weights
 

@@ -1,31 +1,66 @@
-# Production reference stack.
+# Production stack.
 #
-# This is a starting point to adapt, not a turnkey deployment. Differences from
-# the development file that are deliberate:
+#   ./scripts/deploy.sh            build, migrate, and start
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Deliberate differences from the development file:
 #
 #   * PostgreSQL and Redis publish no ports. They are reachable only on the
 #     internal network. Exposing a database port to the host is how a
 #     development convenience becomes a production incident.
+#   * Only the web tier is published, and only to loopback, because a reverse
+#     proxy terminates TLS in front of it.
 #   * Every secret comes from the environment with no default, so a missing
-#     value fails the deploy rather than silently starting with a placeholder.
-#     The application's own settings validation refuses placeholder secrets,
-#     debug mode, insecure cookies, and the fake detector in production.
-#   * The API and web containers sit behind a reverse proxy that terminates
-#     TLS. See docs/DEPLOYMENT.md.
+#     value fails the deploy rather than starting on a placeholder. The
+#     application's own settings validation independently refuses placeholder
+#     secrets, debug mode, insecure cookies, and the fake detector.
+#   * Migrations run as a one-shot service that must complete before the API
+#     and worker start.
 
 name: originlens-prod
 
 x-restart: &restart
   restart: unless-stopped
 
+x-backend-build: &backend-build
+  context: ./backend
+  dockerfile: Dockerfile
+  args:
+    # The worker needs PyTorch and Transformers; they are baked into every
+    # backend stage so the images stay identical apart from their entrypoint.
+    INCLUDE_ML: "true"
+
+x-backend-env: &backend-env
+  ORIGINLENS_ENVIRONMENT: production
+  ORIGINLENS_DEBUG: "false"
+  ORIGINLENS_COOKIE_SECURE: "true"
+  ORIGINLENS_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+  ORIGINLENS_REDIS_URL: redis://redis:6379/0
+  ORIGINLENS_SECRET_KEY: ${ORIGINLENS_SECRET_KEY:?set it in .env.production — see scripts/generate-secrets.sh}
+  ORIGINLENS_ENCRYPTION_KEY: ${ORIGINLENS_ENCRYPTION_KEY:?set it in .env.production — see scripts/generate-secrets.sh}
+  ORIGINLENS_RATE_LIMIT_PEPPER: ${ORIGINLENS_RATE_LIMIT_PEPPER:?set it in .env.production — see scripts/generate-secrets.sh}
+  ORIGINLENS_ALLOWED_HOSTS: ${ORIGINLENS_ALLOWED_HOSTS:?your public hostname, e.g. originlens.example.com}
+  ORIGINLENS_CORS_ORIGINS: ${ORIGINLENS_CORS_ORIGINS:?your public origin, e.g. https://originlens.example.com}
+  ORIGINLENS_DETECTOR_BACKEND: ${ORIGINLENS_DETECTOR_BACKEND:-modernbert}
+  ORIGINLENS_MODEL_ID: ${ORIGINLENS_MODEL_ID:?the model checkpoint to load}
+  ORIGINLENS_MODEL_REVISION: ${ORIGINLENS_MODEL_REVISION:-}
+  ORIGINLENS_MODEL_DEVICE: ${ORIGINLENS_MODEL_DEVICE:-auto}
+  ORIGINLENS_SMTP_HOST: ${ORIGINLENS_SMTP_HOST:?your SMTP host}
+  ORIGINLENS_SMTP_PORT: ${ORIGINLENS_SMTP_PORT:-587}
+  ORIGINLENS_SMTP_USERNAME: ${ORIGINLENS_SMTP_USERNAME:-}
+  ORIGINLENS_SMTP_PASSWORD: ${ORIGINLENS_SMTP_PASSWORD:-}
+  ORIGINLENS_SMTP_USE_TLS: ${ORIGINLENS_SMTP_USE_TLS:-true}
+  ORIGINLENS_EMAIL_FROM: ${ORIGINLENS_EMAIL_FROM:?the From address for transactional mail}
+  ORIGINLENS_LOG_LEVEL: ${ORIGINLENS_LOG_LEVEL:-INFO}
+
 services:
   postgres:
     <<: *restart
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?database user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?database password}
+      POSTGRES_DB: ${POSTGRES_DB:?database name}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -48,76 +83,63 @@ services:
       retries: 10
     # No `ports:` — intentionally unreachable from outside the compose network.
 
-  api:
-    <<: *restart
-    image: ${API_IMAGE:-originlens-api:latest}
-    environment:
-      ORIGINLENS_ENVIRONMENT: production
-      ORIGINLENS_DEBUG: "false"
-      ORIGINLENS_COOKIE_SECURE: "true"
-      ORIGINLENS_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      ORIGINLENS_REDIS_URL: redis://redis:6379/0
-      ORIGINLENS_SECRET_KEY: ${ORIGINLENS_SECRET_KEY:?ORIGINLENS_SECRET_KEY is required}
-      ORIGINLENS_ENCRYPTION_KEY: ${ORIGINLENS_ENCRYPTION_KEY:?ORIGINLENS_ENCRYPTION_KEY is required}
-      ORIGINLENS_RATE_LIMIT_PEPPER: ${ORIGINLENS_RATE_LIMIT_PEPPER:?ORIGINLENS_RATE_LIMIT_PEPPER is required}
-      ORIGINLENS_ALLOWED_HOSTS: ${ORIGINLENS_ALLOWED_HOSTS:?ORIGINLENS_ALLOWED_HOSTS is required}
-      ORIGINLENS_CORS_ORIGINS: ${ORIGINLENS_CORS_ORIGINS:?ORIGINLENS_CORS_ORIGINS is required}
-      ORIGINLENS_DETECTOR_BACKEND: ${ORIGINLENS_DETECTOR_BACKEND:-modernbert}
-      ORIGINLENS_MODEL_ID: ${ORIGINLENS_MODEL_ID:?ORIGINLENS_MODEL_ID is required}
-      ORIGINLENS_MODEL_REVISION: ${ORIGINLENS_MODEL_REVISION:-}
-      ORIGINLENS_SMTP_HOST: ${ORIGINLENS_SMTP_HOST:?ORIGINLENS_SMTP_HOST is required}
-      ORIGINLENS_SMTP_PORT: ${ORIGINLENS_SMTP_PORT:-587}
-      ORIGINLENS_SMTP_USERNAME: ${ORIGINLENS_SMTP_USERNAME:-}
-      ORIGINLENS_SMTP_PASSWORD: ${ORIGINLENS_SMTP_PASSWORD:-}
-      ORIGINLENS_SMTP_USE_TLS: ${ORIGINLENS_SMTP_USE_TLS:-true}
-      ORIGINLENS_EMAIL_FROM: ${ORIGINLENS_EMAIL_FROM:?ORIGINLENS_EMAIL_FROM is required}
-    expose:
-      - "8000"
+  migrate:
+    build:
+      <<: *backend-build
+      target: migrate
+    image: ${MIGRATE_IMAGE:-originlens-migrate:latest}
+    environment: *backend-env
     depends_on:
       postgres:
         condition: service_healthy
+    restart: "no"
+
+  api:
+    <<: *restart
+    build:
+      <<: *backend-build
+      target: api
+    image: ${API_IMAGE:-originlens-api:latest}
+    environment: *backend-env
+    expose:
+      - "8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     stop_grace_period: 30s
 
   worker:
     <<: *restart
+    build:
+      <<: *backend-build
+      target: worker
     image: ${WORKER_IMAGE:-originlens-worker:latest}
-    environment:
-      ORIGINLENS_ENVIRONMENT: production
-      ORIGINLENS_DEBUG: "false"
-      ORIGINLENS_COOKIE_SECURE: "true"
-      ORIGINLENS_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      ORIGINLENS_REDIS_URL: redis://redis:6379/0
-      ORIGINLENS_SECRET_KEY: ${ORIGINLENS_SECRET_KEY}
-      ORIGINLENS_ENCRYPTION_KEY: ${ORIGINLENS_ENCRYPTION_KEY}
-      ORIGINLENS_RATE_LIMIT_PEPPER: ${ORIGINLENS_RATE_LIMIT_PEPPER}
-      ORIGINLENS_ALLOWED_HOSTS: ${ORIGINLENS_ALLOWED_HOSTS}
-      ORIGINLENS_CORS_ORIGINS: ${ORIGINLENS_CORS_ORIGINS}
-      ORIGINLENS_DETECTOR_BACKEND: ${ORIGINLENS_DETECTOR_BACKEND:-modernbert}
-      ORIGINLENS_MODEL_ID: ${ORIGINLENS_MODEL_ID}
-      ORIGINLENS_MODEL_REVISION: ${ORIGINLENS_MODEL_REVISION:-}
-      ORIGINLENS_EMAIL_FROM: ${ORIGINLENS_EMAIL_FROM}
-      ORIGINLENS_SMTP_HOST: ${ORIGINLENS_SMTP_HOST}
+    environment: *backend-env
     volumes:
-      # Model weights are large; a named volume avoids re-downloading them on
+      # Model weights are large. A named volume avoids re-downloading them on
       # every deploy and lets an air-gapped host be seeded in advance.
       - model-cache:/home/originlens/.cache/huggingface
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     stop_grace_period: 120s
 
   web:
     <<: *restart
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     image: ${WEB_IMAGE:-originlens-web:latest}
     environment:
       NODE_ENV: production
       API_INTERNAL_URL: http://api:8000
-    expose:
-      - "3000"
+    # Published to loopback only. Point your TLS-terminating reverse proxy here.
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3000}:3000"
     depends_on:
       - api
     stop_grace_period: 20s

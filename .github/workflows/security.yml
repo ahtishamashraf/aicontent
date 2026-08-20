@@ -2,7 +2,10 @@ name: Security
 
 on:
   push:
-    branches: [main]
+    # Feature branches are covered too: this repository's trunk was created
+    # after the first branches existed, and CI that never fires is worse than
+    # no CI because it looks green.
+    branches: [main, 'claude/**']
   pull_request:
   schedule:
     # Weekly, so a newly-published advisory against an unchanged dependency is

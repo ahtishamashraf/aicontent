@@ -28,6 +28,7 @@ out/
 .env
 .env.*
 !.env.example
+!.env.production.example
 
 # Model weights & caches (never commit)
 /models/

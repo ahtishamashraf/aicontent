@@ -2,7 +2,10 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # Feature branches are covered too: this repository's trunk was created
+    # after the first branches existed, and CI that never fires is worse than
+    # no CI because it looks green.
+    branches: [main, 'claude/**']
   pull_request:
 
 # A new push supersedes an in-flight run for the same ref.
@@ -279,11 +282,28 @@ jobs:
           print('no published ports in the production stack')
           "
 
+      # Each backend target builds independently from the same file, so no
+      # image depends on another having been built first.
       - name: Build the API image
-        run: docker build -t originlens-api:latest ./backend
+        run: docker build --target api -t originlens-api:latest ./backend
 
       - name: Build the worker image
-        run: docker build -t originlens-worker:latest -f ./backend/Dockerfile.worker ./backend
+        run: docker build --target worker -t originlens-worker:latest ./backend
+
+      - name: Build the migration image
+        run: docker build --target migrate -t originlens-migrate:latest ./backend
 
       - name: Build the web image
         run: docker build -t originlens-web:latest ./frontend
+
+      - name: Assert the images run as a non-root user
+        run: |
+          set -euo pipefail
+          for image in originlens-api originlens-worker originlens-web; do
+            user=$(docker run --rm --entrypoint sh "$image:latest" -c 'id -u')
+            if [ "$user" = "0" ]; then
+              echo "::error::$image runs as root"
+              exit 1
+            fi
+            echo "$image runs as uid $user"
+          done

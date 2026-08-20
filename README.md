@@ -76,12 +76,47 @@ Then open:
 | Model readiness | <http://localhost:8000/api/v1/health/model> |
 | Mailpit | <http://localhost:8025> |
 
-The whole stack in containers:
+### Everything in containers
 
 ```bash
-make up      # docker compose up --build -d
+make up      # builds, migrates, and starts the whole stack
+make logs
 make down
 ```
+
+`docker compose up` runs migrations as a one-shot container that must finish
+before the API and worker start, so there is nothing to remember and nothing to
+race.
+
+---
+
+## Deploying to production
+
+```bash
+./scripts/generate-secrets.sh    # writes .env.production with fresh secrets
+$EDITOR .env.production          # set your hostname, model, and SMTP details
+./scripts/deploy.sh              # build, migrate, start, wait for readiness
+```
+
+`deploy.sh` refuses to proceed with placeholder hostnames, placeholder secrets,
+or the fake detector; validates the Compose configuration; builds; brings the
+stack up; and polls readiness before reporting success.
+
+Then:
+
+```bash
+COMPOSE="docker compose --env-file .env.production -f docker-compose.prod.yml"
+$COMPOSE run --rm api python -m app.cli seed-settings
+$COMPOSE run --rm api python -m app.cli create-admin --email you@example.com
+```
+
+The production stack publishes **only** the web tier, and only on loopback —
+PostgreSQL and Redis are unreachable from outside the Compose network. Point a
+TLS-terminating reverse proxy at `127.0.0.1:3000`; worked nginx and Caddy
+configurations are in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
+Back up `ORIGINLENS_ENCRYPTION_KEY` separately. Losing it makes every retained
+submission unrecoverable.
 
 ---
 

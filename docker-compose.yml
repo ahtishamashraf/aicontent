@@ -1,10 +1,23 @@
 # Development stack.
 #
+#   docker compose up -d          builds, migrates, and starts everything
+#
 # Ports are published on localhost so you can reach the databases from your
-# editor and from the test suite. The production reference file
-# (docker-compose.prod.yml) deliberately does not publish them.
+# editor and test suite. The production file deliberately publishes nothing.
 
 name: originlens
+
+x-backend-build: &backend-build
+  context: ./backend
+  dockerfile: Dockerfile
+
+x-backend-env: &backend-env
+  ORIGINLENS_DATABASE_URL: postgresql+psycopg://originlens:originlens@postgres:5432/originlens
+  ORIGINLENS_REDIS_URL: redis://redis:6379/0
+  ORIGINLENS_SMTP_HOST: mailpit
+  ORIGINLENS_SMTP_PORT: "1025"
+  ORIGINLENS_CORS_ORIGINS: http://localhost:3000
+  ORIGINLENS_COOKIE_SECURE: "false"
 
 services:
   postgres:
@@ -44,46 +57,48 @@ services:
       MP_SMTP_AUTH_ACCEPT_ANY: "1"
       MP_SMTP_AUTH_ALLOW_INSECURE: "1"
 
-  api:
+  # One-shot: brings the schema to head, then exits. The API and worker wait for
+  # it to complete, so migrations run exactly once instead of racing.
+  migrate:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
-    image: originlens-api:latest
+      <<: *backend-build
+      target: migrate
+    image: originlens-migrate:latest
     env_file: .env
-    environment:
-      ORIGINLENS_DATABASE_URL: postgresql+psycopg://originlens:originlens@postgres:5432/originlens
-      ORIGINLENS_REDIS_URL: redis://redis:6379/0
-      ORIGINLENS_SMTP_HOST: mailpit
-      ORIGINLENS_SMTP_PORT: "1025"
-      ORIGINLENS_CORS_ORIGINS: http://localhost:3000
-    ports:
-      - "127.0.0.1:8000:8000"
+    environment: *backend-env
     depends_on:
       postgres:
         condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      <<: *backend-build
+      target: api
+    image: originlens-api:latest
+    env_file: .env
+    environment: *backend-env
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
-    # Give in-flight requests time to drain rather than cutting them off.
     stop_grace_period: 30s
 
   worker:
     build:
-      context: ./backend
-      dockerfile: Dockerfile.worker
+      <<: *backend-build
+      target: worker
     image: originlens-worker:latest
     env_file: .env
-    environment:
-      ORIGINLENS_DATABASE_URL: postgresql+psycopg://originlens:originlens@postgres:5432/originlens
-      ORIGINLENS_REDIS_URL: redis://redis:6379/0
-      ORIGINLENS_SMTP_HOST: mailpit
-      ORIGINLENS_SMTP_PORT: "1025"
+    environment: *backend-env
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
-      api:
-        condition: service_started
     volumes:
       # Persist the model cache so weights survive a rebuild.
       - model-cache:/home/originlens/.cache/huggingface

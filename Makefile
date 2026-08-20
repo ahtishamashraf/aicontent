@@ -79,12 +79,28 @@ dev-web: ## Run the frontend dev server
 	cd $(FRONTEND) && npm run dev
 
 .PHONY: up
-up: ## Start the full stack with Docker Compose
+up: ## Start the full development stack (builds, migrates, runs)
 	docker compose up --build -d
+	@echo
+	@echo "App:      http://localhost:3000"
+	@echo "API docs: http://localhost:8000/docs"
+	@echo "Mailpit:  http://localhost:8025"
 
 .PHONY: down
-down: ## Stop the Docker Compose stack
+down: ## Stop the development stack
 	docker compose down
+
+.PHONY: logs
+logs: ## Follow logs from the development stack
+	docker compose logs -f --tail 100
+
+.PHONY: secrets
+secrets: ## Generate .env.production with fresh secrets
+	./scripts/generate-secrets.sh
+
+.PHONY: deploy
+deploy: ## Build, migrate, and start the production stack
+	./scripts/deploy.sh
 
 # ---------------------------------------------------------------------------
 # Quality gates
