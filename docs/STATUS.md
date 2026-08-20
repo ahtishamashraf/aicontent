@@ -154,6 +154,12 @@ The Docker **CLI and Compose are present but no daemon is available**, so:
 * `scripts/generate-secrets.sh` was run and its output was fed through
   `Settings(environment="production")`, which **accepted it** — so the generator
   produces a configuration the application will actually start on.
+* The build contexts were measured before and after adding per-context
+  `.dockerignore` files: `backend` fell from **6.7 GiB to 0.2 MiB** and
+  `frontend` from ~840 MiB to 0.6 MiB. More importantly, a developer's local
+  `backend/.env` would have been **baked into a distributable image layer**;
+  it is now excluded, and CI asserts no built image contains a `.env` or a
+  virtualenv.
 
 Integration and E2E were run against natively-installed PostgreSQL, Redis, and a
 mail catcher instead of containers, so the behaviour they cover is verified even

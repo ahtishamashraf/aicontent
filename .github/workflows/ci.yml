@@ -307,3 +307,24 @@ jobs:
             fi
             echo "$image runs as uid $user"
           done
+
+      # The build contexts are ./backend and ./frontend, so the repository-root
+      # .dockerignore does not apply to them. Without the per-context files a
+      # local .env is baked into a distributable layer.
+      - name: Assert no secrets or virtualenvs were baked into the images
+        run: |
+          set -euo pipefail
+          for image in originlens-api originlens-worker; do
+            leaked=$(docker run --rm --entrypoint sh "$image:latest" -c \
+              'ls -A /app 2>/dev/null | grep -xE "\.env|\.venv|venv" || true')
+            if [ -n "$leaked" ]; then
+              echo "::error::$image contains $leaked"
+              exit 1
+            fi
+            echo "$image carries no .env or virtualenv"
+          done
+
+      - name: Report image sizes
+        run: |
+          docker images --format '{{.Repository}}:{{.Tag}}\t{{.Size}}' \
+            | grep '^originlens-' | sort

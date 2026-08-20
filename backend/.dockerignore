@@ -1,0 +1,32 @@
+# The build context is ./backend, so the repository-root .dockerignore does NOT
+# apply here. Without this file the context is several gigabytes and, worse, a
+# local .env would be baked into a distributable image layer.
+
+# Secrets — never in an image.
+.env
+.env.*
+!.env.example
+
+# Virtualenv: multi-gigabyte, and the wrong platform's wheels anyway.
+.venv/
+venv/
+*.egg-info/
+
+# Caches and test artefacts.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Tests and fixtures are not needed at runtime.
+tests/
+
+# Model weights are mounted as a volume, never copied in.
+hf_cache/
+*.safetensors
+*.bin
+*.onnx

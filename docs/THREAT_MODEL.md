@@ -149,6 +149,14 @@ server-side pepper, truncated to 128 bits; rotating the pepper invalidates every
 stored identifier. An integration test asserts no plaintext identifier reaches
 Redis.
 
+### Secrets baked into container images
+The Docker build contexts are `./backend` and `./frontend`, so the
+repository-root `.dockerignore` does **not** apply to them. Without per-context
+files a developer's local `.env` is copied into a distributable image layer,
+where deleting it later does not remove it from the layer history. Both
+contexts have their own `.dockerignore`, and CI asserts that no built image
+contains a `.env` or a virtualenv.
+
 ### Secret leakage and unsafe configuration
 Production start-up **fails closed** on placeholder secrets, short secrets,
 debug mode, insecure cookies, `localhost` in the host allow-list, metrics
