@@ -2,7 +2,10 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # Feature branches are covered too: this repository's trunk was created
+    # after the first branches existed, and CI that never fires is worse than
+    # no CI because it looks green.
+    branches: [main, 'claude/**']
   pull_request:
 
 # A new push supersedes an in-flight run for the same ref.
@@ -25,9 +28,9 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -88,9 +91,9 @@ jobs:
       ORIGINLENS_COOKIE_SECURE: "false"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -133,9 +136,9 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -182,15 +185,15 @@ jobs:
           --health-interval 5s --health-timeout 3s --health-retries 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
           cache-dependency-path: backend/requirements.lock
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -224,7 +227,7 @@ jobs:
       # only on failure, kept briefly, and must be reviewed before sharing.
       - name: Upload Playwright report on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: frontend/playwright-report/
@@ -235,7 +238,7 @@ jobs:
     name: Docker images and Compose
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Validate the development Compose file
         run: docker compose -f docker-compose.yml config --quiet
@@ -279,11 +282,49 @@ jobs:
           print('no published ports in the production stack')
           "
 
+      # Each backend target builds independently from the same file, so no
+      # image depends on another having been built first.
       - name: Build the API image
-        run: docker build -t originlens-api:latest ./backend
+        run: docker build --target api -t originlens-api:latest ./backend
 
       - name: Build the worker image
-        run: docker build -t originlens-worker:latest -f ./backend/Dockerfile.worker ./backend
+        run: docker build --target worker -t originlens-worker:latest ./backend
+
+      - name: Build the migration image
+        run: docker build --target migrate -t originlens-migrate:latest ./backend
 
       - name: Build the web image
         run: docker build -t originlens-web:latest ./frontend
+
+      - name: Assert the images run as a non-root user
+        run: |
+          set -euo pipefail
+          for image in originlens-api originlens-worker originlens-web; do
+            user=$(docker run --rm --entrypoint sh "$image:latest" -c 'id -u')
+            if [ "$user" = "0" ]; then
+              echo "::error::$image runs as root"
+              exit 1
+            fi
+            echo "$image runs as uid $user"
+          done
+
+      # The build contexts are ./backend and ./frontend, so the repository-root
+      # .dockerignore does not apply to them. Without the per-context files a
+      # local .env is baked into a distributable layer.
+      - name: Assert no secrets or virtualenvs were baked into the images
+        run: |
+          set -euo pipefail
+          for image in originlens-api originlens-worker; do
+            leaked=$(docker run --rm --entrypoint sh "$image:latest" -c \
+              'ls -A /app 2>/dev/null | grep -xE "\.env|\.venv|venv" || true')
+            if [ -n "$leaked" ]; then
+              echo "::error::$image contains $leaked"
+              exit 1
+            fi
+            echo "$image carries no .env or virtualenv"
+          done
+
+      - name: Report image sizes
+        run: |
+          docker images --format '{{.Repository}}:{{.Tag}}\t{{.Size}}' \
+            | grep '^originlens-' | sort

@@ -142,9 +142,24 @@ any result.
 ### Running containers
 The Docker **CLI and Compose are present but no daemon is available**, so:
 
-* Both Compose files were validated with `docker compose config` (passing).
-* The Dockerfiles have **not been built or run here.** CI builds all three
-  images; that job has not executed in this environment.
+* Both Compose files were validated with `docker compose config` (passing), and
+  the resolved output was asserted to show migrations gated on
+  `service_completed_successfully` and no published ports on PostgreSQL or Redis.
+* The Dockerfile has **not been built or run here.** CI builds all four targets
+  and asserts each image runs as a non-root user; that job has not executed in
+  this environment.
+* `scripts/deploy.sh` preflight guards were exercised individually (missing env
+  file, placeholder hostname, placeholder secret, fake detector) and all four
+  refuse correctly. The build and start phases could not run without a daemon.
+* `scripts/generate-secrets.sh` was run and its output was fed through
+  `Settings(environment="production")`, which **accepted it** — so the generator
+  produces a configuration the application will actually start on.
+* The build contexts were measured before and after adding per-context
+  `.dockerignore` files: `backend` fell from **6.7 GiB to 0.2 MiB** and
+  `frontend` from ~840 MiB to 0.6 MiB. More importantly, a developer's local
+  `backend/.env` would have been **baked into a distributable image layer**;
+  it is now excluded, and CI asserts no built image contains a `.env` or a
+  virtualenv.
 
 Integration and E2E were run against natively-installed PostgreSQL, Redis, and a
 mail catcher instead of containers, so the behaviour they cover is verified even
@@ -184,7 +199,14 @@ the branch has not yet been pushed with a pull request.
    is itself unreliable on very short text. The 80-word minimum mitigates this.
 8. **`X-Forwarded-For` is not trusted.** Rate limiting uses the socket peer, so
    behind a proxy every client shares one identifier until
-   `client_identifier()` is adapted. Documented in `DEPLOYMENT.md`.
+   `client_identifier()` is adapted. Documented in `DEPLOYMENT.md` with the
+   condition under which it is safe to change.
+9. **Container images are unbuilt here.** The Dockerfile was restructured into
+   four targets (`api`, `worker`, `migrate`, plus the shared `runtime` base)
+   because the previous worker image began `FROM originlens-api:latest`, which
+   would have made `docker compose build` fail on a clean checkout. The fix is
+   correct by construction — each target builds independently from the same
+   file — but it has not been built and run in this environment.
 
 ## Honest summary
 

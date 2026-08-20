@@ -1,0 +1,22 @@
+# The build context is ./frontend, so the repository-root .dockerignore does NOT
+# apply here. node_modules is reinstalled from the lockfile inside the image;
+# copying the host's copy is slow and can carry the wrong platform's binaries.
+
+.env
+.env.*
+!.env.example
+
+node_modules/
+.next/
+out/
+
+# Test output, some of which can contain submitted text.
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+coverage/
+
+tests/
+e2e/
+playwright.config.ts

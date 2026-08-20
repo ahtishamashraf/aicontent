@@ -2,7 +2,10 @@ name: Security
 
 on:
   push:
-    branches: [main]
+    # Feature branches are covered too: this repository's trunk was created
+    # after the first branches existed, and CI that never fires is worse than
+    # no CI because it looks green.
+    branches: [main, 'claude/**']
   pull_request:
   schedule:
     # Weekly, so a newly-published advisory against an unchanged dependency is
@@ -17,13 +20,13 @@ jobs:
     name: Dependency audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -44,7 +47,7 @@ jobs:
     name: Secret and artefact scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -90,9 +93,9 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
